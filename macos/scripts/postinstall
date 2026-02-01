@@ -1,0 +1,229 @@
+#!/bin/bash
+# Laravel Bulk Installer - Post-installation Script for macOS
+# This script runs after the package payload is installed.
+# It configures the system and starts services.
+
+set -e
+
+LOG_FILE="/tmp/laravel-installer-postinstall.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo "=== Laravel Bulk Installer Post-Installation ==="
+echo "Date: $(date)"
+echo "User: $(whoami)"
+echo "Architecture: $(uname -m)"
+
+# Detect architecture for Homebrew prefix
+ARCH=$(uname -m)
+if [ "$ARCH" = "arm64" ]; then
+    HOMEBREW_PREFIX="/opt/homebrew"
+    PLIST_SUFFIX=""
+else
+    HOMEBREW_PREFIX="/usr/local"
+    PLIST_SUFFIX="-intel"
+fi
+
+APP_SUPPORT="$HOME/Library/Application Support/laravel-bulk-installer"
+LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
+
+echo "Homebrew prefix: $HOMEBREW_PREFIX"
+echo "App Support: $APP_SUPPORT"
+
+# Install required Homebrew packages
+install_homebrew_deps() {
+    echo "Installing required Homebrew packages..."
+
+    # Core dependencies
+    brew install httpd php composer git 2>/dev/null || brew upgrade httpd php composer git 2>/dev/null || true
+
+    echo "Homebrew packages installed/updated"
+}
+
+# Install Python dependencies
+install_python_deps() {
+    echo "Installing Python dependencies..."
+
+    pip3 install --user customtkinter packaging 2>/dev/null || true
+
+    echo "Python dependencies installed"
+}
+
+# Configure Apache httpd
+configure_apache() {
+    echo "Configuring Apache httpd..."
+
+    HTTPD_CONF="$HOMEBREW_PREFIX/etc/httpd/httpd.conf"
+
+    if [ -f "$HTTPD_CONF" ]; then
+        # Enable required modules
+        sed -i.bak 's/#LoadModule rewrite_module/LoadModule rewrite_module/' "$HTTPD_CONF"
+        sed -i.bak 's/#LoadModule proxy_module/LoadModule proxy_module/' "$HTTPD_CONF"
+        sed -i.bak 's/#LoadModule proxy_fcgi_module/LoadModule proxy_fcgi_module/' "$HTTPD_CONF"
+        sed -i.bak 's/#LoadModule vhost_alias_module/LoadModule vhost_alias_module/' "$HTTPD_CONF"
+
+        # Add Include for sites-enabled if not present
+        if ! grep -q "sites-enabled" "$HTTPD_CONF"; then
+            echo "" >> "$HTTPD_CONF"
+            echo "# Laravel Installer VirtualHosts" >> "$HTTPD_CONF"
+            echo "IncludeOptional $HOMEBREW_PREFIX/etc/httpd/sites-enabled/*.conf" >> "$HTTPD_CONF"
+        fi
+
+        echo "Apache configured"
+    else
+        echo "WARNING: httpd.conf not found at $HTTPD_CONF"
+    fi
+}
+
+# Install launchd plists
+install_launchd_plists() {
+    echo "Installing launchd plists..."
+
+    # Copy appropriate plist based on architecture
+    if [ -f "$APP_SUPPORT/launchd/com.laravel.installer.httpd${PLIST_SUFFIX}.plist" ]; then
+        cp "$APP_SUPPORT/launchd/com.laravel.installer.httpd${PLIST_SUFFIX}.plist" \
+           "$LAUNCH_AGENTS/com.laravel.installer.httpd.plist"
+    fi
+
+    if [ -f "$APP_SUPPORT/launchd/com.laravel.installer.php-fpm${PLIST_SUFFIX}.plist" ]; then
+        cp "$APP_SUPPORT/launchd/com.laravel.installer.php-fpm${PLIST_SUFFIX}.plist" \
+           "$LAUNCH_AGENTS/com.laravel.installer.php-fpm.plist"
+    fi
+
+    echo "launchd plists installed"
+}
+
+# Load launchd services
+load_services() {
+    echo "Loading launchd services..."
+
+    # Use brew services for better integration
+    brew services start httpd 2>/dev/null || true
+    brew services start php 2>/dev/null || true
+
+    echo "Services loaded"
+}
+
+# Set permissions
+set_permissions() {
+    echo "Setting permissions..."
+
+    # App files
+    chmod +x "$APP_SUPPORT/app.py" 2>/dev/null || true
+    chmod +x "$APP_SUPPORT/launch.command" 2>/dev/null || true
+
+    # Web directories
+    sudo chown -R "$(whoami):staff" "$HOMEBREW_PREFIX/var/www" 2>/dev/null || true
+    sudo chmod -R 775 "$HOMEBREW_PREFIX/var/www" 2>/dev/null || true
+
+    echo "Permissions set"
+}
+
+# Create CLI symlink
+create_cli_symlink() {
+    echo "Creating CLI symlink..."
+
+    SYMLINK_PATH="$HOMEBREW_PREFIX/bin/laravel-installer"
+
+    if [ -f "$APP_SUPPORT/launch.command" ]; then
+        sudo ln -sf "$APP_SUPPORT/launch.command" "$SYMLINK_PATH" 2>/dev/null || true
+        echo "CLI symlink created at $SYMLINK_PATH"
+    fi
+}
+
+# Verify installation
+verify_installation() {
+    echo ""
+    echo "Verifying installation..."
+
+    ERRORS=0
+
+    # Check app.py exists
+    if [ -f "$APP_SUPPORT/app.py" ]; then
+        echo "[OK] app.py installed"
+    else
+        echo "[FAIL] app.py not found"
+        ERRORS=$((ERRORS + 1))
+    fi
+
+    # Check Python imports
+    if python3 -c "import customtkinter" 2>/dev/null; then
+        echo "[OK] customtkinter available"
+    else
+        echo "[WARN] customtkinter may need manual install"
+    fi
+
+    # Check Homebrew packages
+    if command -v httpd &> /dev/null; then
+        echo "[OK] Apache httpd installed"
+    else
+        echo "[FAIL] Apache httpd not found"
+        ERRORS=$((ERRORS + 1))
+    fi
+
+    if command -v php &> /dev/null; then
+        echo "[OK] PHP installed: $(php -v | head -1)"
+    else
+        echo "[FAIL] PHP not found"
+        ERRORS=$((ERRORS + 1))
+    fi
+
+    if command -v composer &> /dev/null; then
+        echo "[OK] Composer installed"
+    else
+        echo "[WARN] Composer not found"
+    fi
+
+    if [ $ERRORS -gt 0 ]; then
+        echo ""
+        echo "WARNING: $ERRORS critical errors found"
+        echo "Please check the log at $LOG_FILE"
+    fi
+
+    return $ERRORS
+}
+
+# Print usage information
+print_usage() {
+    echo ""
+    echo "=== Installation Complete ==="
+    echo ""
+    echo "To launch the Laravel Bulk Installer:"
+    echo ""
+    echo "  Option 1: Run from Terminal"
+    echo "    laravel-installer"
+    echo ""
+    echo "  Option 2: Run directly"
+    echo "    python3 \"$APP_SUPPORT/app.py\""
+    echo ""
+    echo "  Option 3: Double-click"
+    echo "    Open: $APP_SUPPORT/launch.command"
+    echo ""
+    echo "Web server configuration:"
+    echo "  Document root: $HOMEBREW_PREFIX/var/www/html"
+    echo "  Apache config: $HOMEBREW_PREFIX/etc/httpd"
+    echo "  Site configs:  $HOMEBREW_PREFIX/etc/httpd/sites-available"
+    echo ""
+    echo "Logs:"
+    echo "  Installation: /tmp/laravel-installer-postinstall.log"
+    echo "  Apache:       $HOMEBREW_PREFIX/var/log/httpd/"
+    echo ""
+}
+
+# Main execution
+echo ""
+echo "Running post-installation setup..."
+echo ""
+
+install_homebrew_deps
+install_python_deps
+configure_apache
+install_launchd_plists
+set_permissions
+create_cli_symlink
+load_services
+verify_installation
+print_usage
+
+echo "=== Post-installation completed ==="
+
+exit 0

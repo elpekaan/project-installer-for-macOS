@@ -1,0 +1,126 @@
+#!/bin/bash
+# Laravel Bulk Installer - Pre-installation Script for macOS
+# This script runs before the package payload is installed.
+# It prepares the system and checks prerequisites.
+
+set -e
+
+LOG_FILE="/tmp/laravel-installer-preinstall.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo "=== Laravel Bulk Installer Pre-Installation ==="
+echo "Date: $(date)"
+echo "User: $(whoami)"
+echo "Architecture: $(uname -m)"
+
+# Detect architecture for Homebrew prefix
+ARCH=$(uname -m)
+if [ "$ARCH" = "arm64" ]; then
+    HOMEBREW_PREFIX="/opt/homebrew"
+else
+    HOMEBREW_PREFIX="/usr/local"
+fi
+
+echo "Homebrew prefix: $HOMEBREW_PREFIX"
+
+# Check for Homebrew
+check_homebrew() {
+    if ! command -v brew &> /dev/null; then
+        echo "ERROR: Homebrew is not installed."
+        echo "Please install Homebrew first: https://brew.sh"
+        echo "Run: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+        exit 1
+    fi
+    echo "Homebrew found: $(brew --version | head -1)"
+}
+
+# Check for Python 3
+check_python() {
+    if ! command -v python3 &> /dev/null; then
+        echo "Python 3 not found. Installing via Homebrew..."
+        brew install python3
+    fi
+    echo "Python found: $(python3 --version)"
+}
+
+# Check for required Python packages (tkinter)
+check_tkinter() {
+    if ! python3 -c "import tkinter" 2>/dev/null; then
+        echo "tkinter not found. Installing python-tk via Homebrew..."
+        brew install python-tk
+    fi
+    echo "tkinter available"
+}
+
+# Create required directories
+create_directories() {
+    echo "Creating required directories..."
+
+    # Application Support directory
+    mkdir -p "$HOME/Library/Application Support/laravel-bulk-installer"
+
+    # Web directories (Homebrew structure)
+    sudo mkdir -p "$HOMEBREW_PREFIX/var/www"
+    sudo mkdir -p "$HOMEBREW_PREFIX/var/www/html"
+    sudo mkdir -p "$HOMEBREW_PREFIX/etc/httpd/sites-available"
+    sudo mkdir -p "$HOMEBREW_PREFIX/etc/httpd/sites-enabled"
+    sudo mkdir -p "$HOMEBREW_PREFIX/var/log/httpd"
+
+    # LaunchAgents directory
+    mkdir -p "$HOME/Library/LaunchAgents"
+
+    echo "Directories created successfully"
+}
+
+# Backup existing configurations
+backup_configs() {
+    BACKUP_DIR="/tmp/laravel-installer-backup-$(date +%Y%m%d%H%M%S)"
+    mkdir -p "$BACKUP_DIR"
+
+    # Backup httpd.conf if exists
+    if [ -f "$HOMEBREW_PREFIX/etc/httpd/httpd.conf" ]; then
+        cp "$HOMEBREW_PREFIX/etc/httpd/httpd.conf" "$BACKUP_DIR/"
+        echo "Backed up httpd.conf to $BACKUP_DIR"
+    fi
+
+    # Backup existing sites-available
+    if [ -d "$HOMEBREW_PREFIX/etc/httpd/sites-available" ]; then
+        cp -r "$HOMEBREW_PREFIX/etc/httpd/sites-available" "$BACKUP_DIR/"
+        echo "Backed up sites-available to $BACKUP_DIR"
+    fi
+
+    echo "Backup location: $BACKUP_DIR"
+}
+
+# Stop existing services if running
+stop_services() {
+    echo "Stopping any existing services..."
+
+    # Stop via brew services
+    brew services stop httpd 2>/dev/null || true
+    brew services stop php 2>/dev/null || true
+
+    # Stop via launchctl if our plists exist
+    launchctl unload "$HOME/Library/LaunchAgents/com.laravel.installer.httpd.plist" 2>/dev/null || true
+    launchctl unload "$HOME/Library/LaunchAgents/com.laravel.installer.php-fpm.plist" 2>/dev/null || true
+
+    echo "Services stopped"
+}
+
+# Main execution
+echo ""
+echo "Running pre-installation checks..."
+echo ""
+
+check_homebrew
+check_python
+check_tkinter
+backup_configs
+stop_services
+create_directories
+
+echo ""
+echo "=== Pre-installation completed successfully ==="
+echo ""
+
+exit 0
