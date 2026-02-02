@@ -108,18 +108,9 @@ PATHS = {
     "apache_sites": os.path.join(HOMEBREW_PREFIX, "etc", "httpd", "sites-available"),
     "apache_sites_enabled": os.path.join(HOMEBREW_PREFIX, "etc", "httpd", "sites-enabled"),
     "apache_log": os.path.join(HOMEBREW_PREFIX, "var", "log", "httpd"),
-
-    # PHP paths (Homebrew)
-    "php_base": os.path.join(HOMEBREW_PREFIX, "opt"),
-    "php_run": os.path.join(HOMEBREW_PREFIX, "var", "run"),
-
-    # System paths
-    "hosts": "/etc/hosts",
-    "launchd_agents": os.path.join(os.path.expanduser("~"), "Library", "LaunchAgents"),
 }
 
-# macOS web user (equivalent to www-data on Linux)
-WEB_USER = "_www"
+# macOS web group (staff is standard for user-accessible files)
 WEB_GROUP = "staff"
 
 
@@ -498,7 +489,7 @@ class ProjectInstallerApp(ctk.CTk):
         pwd = self.request("ask_password")
         if not pwd:
             self.log("Cancelled: Password required.", "error")
-            self.reset_state()
+            self.after(0, self.reset_state)  # Thread-safe GUI call
             return
 
         # Ensure directories exist
