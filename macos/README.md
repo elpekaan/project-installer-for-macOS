@@ -8,17 +8,17 @@ Ported from Linux (Ubuntu/Debian) to macOS with full functional equivalence.
 
 ## Features
 
-- Add multiple Laravel projects with project name and Git repository URL
-- Automatically clone or pull the latest version of each project
-- Copy `.env.example` to `.env` if `.env` does not exist
-- Detect required PHP version from `composer.json` and switch PHP accordingly
-- Automatic PHP management via Homebrew
-- Create symlinks from project `public` folder to web root
-- Add projects to `/etc/hosts`
-- Configure Apache VirtualHosts for each project
-- Set proper file permissions and ownership
-- Bulk setup all added projects with a single click
-- Supports both Apple Silicon (ARM64) and Intel (x86_64) Macs
+- **Bulk Installation**: Add multiple Laravel projects and install them all with a single click
+- **Auto Git Clone/Pull**: Automatically clone or pull the latest version of each project
+- **Environment Setup**: Copy `.env.example` to `.env` and generate `APP_KEY` automatically
+- **Smart PHP Detection**: Read required PHP version from `composer.json` and switch PHP accordingly
+- **Homebrew Integration**: Automatic PHP and dependency management via Homebrew
+- **Apache VirtualHost**: Auto-generate and configure VirtualHosts for each project
+- **Symlink Management**: Create symlinks from project `public` folder to web root
+- **Hosts File Update**: Add projects to `/etc/hosts` automatically
+- **Permission Handling**: Set proper file permissions and ownership
+- **Multi-Architecture**: Supports both Apple Silicon (ARM64) and Intel (x86_64) Macs
+- **Security Hardened**: Input sanitization, path traversal protection, safe shell commands
 
 ---
 
@@ -37,6 +37,71 @@ The following are installed automatically during setup:
 - PHP (via Homebrew, multiple versions supported)
 - Composer (via Homebrew)
 - Git (via Xcode Command Line Tools or Homebrew)
+
+---
+
+## Prerequisites Setup
+
+Before using the installer, ensure your macOS is ready:
+
+### 1. Install Xcode Command Line Tools
+
+```bash
+xcode-select --install
+```
+
+### 2. Install Homebrew
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+**For Apple Silicon Macs**, add Homebrew to PATH:
+```bash
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+```
+
+### 3. Install Apache and PHP
+
+```bash
+brew install httpd php composer
+brew services start httpd
+brew services start php
+```
+
+### 4. Configure Apache for Sites
+
+Add the following to your Apache config (`/opt/homebrew/etc/httpd/httpd.conf`):
+
+```apache
+# At the end of the file, add:
+IncludeOptional /opt/homebrew/etc/httpd/sites-enabled/*.conf
+```
+
+Create the sites directories:
+```bash
+mkdir -p /opt/homebrew/etc/httpd/sites-available
+mkdir -p /opt/homebrew/etc/httpd/sites-enabled
+```
+
+### 5. Configure SSH Keys (For Private Repositories)
+
+If you'll be cloning private repositories via SSH:
+
+```bash
+# Generate SSH key if you don't have one
+ssh-keygen -t ed25519 -C "your_email@example.com"
+
+# Add to SSH agent
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519
+
+# Copy public key to clipboard
+pbcopy < ~/.ssh/id_ed25519.pub
+
+# Add this key to your GitHub/GitLab account
+```
 
 ---
 
@@ -80,38 +145,171 @@ sudo installer -pkg output/LaravelInstaller-2.0.0.pkg -target /
 
 ## Usage
 
-### Launch the Application
+### Step 1: Launch the Application
 
-**From Terminal:**
+Choose one of the following methods:
+
+**Method A - Terminal Command (Recommended):**
 ```bash
 laravel-installer
 ```
 
-**Or run directly:**
+**Method B - Direct Python Execution:**
 ```bash
 python3 ~/Library/Application\ Support/laravel-bulk-installer/app.py
 ```
 
-**Or double-click:**
+**Method C - Double-Click:**
 ```
-~/Library/Application Support/laravel-bulk-installer/launch.command
+Open Finder → Navigate to:
+~/Library/Application Support/laravel-bulk-installer/
+Double-click "launch.command"
 ```
 
-### Adding Projects
+---
 
-1. Enter the project name (e.g., `my-laravel-app`)
-2. Enter the Git repository URL
-3. Click **Add to Queue**
-4. Repeat for additional projects
-5. Click **START INSTALLATION**
-6. Enter your admin password when prompted
+### Step 2: First Run - Installation Dialog
 
-### Accessing Projects
+On first run, you'll see a welcome dialog with two options:
 
-After installation, access your projects at:
+| Option | Description |
+|--------|-------------|
+| **Run Once (Try)** | Run the app without installing to system |
+| **Install to System** | Install to `~/Library/Application Support` and create CLI command |
+
+**Recommendation:** Click **"Install to System"** for easy future access.
+
+---
+
+### Step 3: Add Projects to Queue
+
+The main window has two sections: **Add New Project** and **Installation Queue**.
+
+#### 3.1 Enter Project Details
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| **Project Name** | A unique name for your project (letters, numbers, hyphens only) | `ecommerce-api` |
+| **Git Repository URL** | The Git clone URL (HTTPS or SSH) | `git@github.com:user/repo.git` |
+
+#### 3.2 Click "Add to Queue"
+
+The project will appear in the **Installation Queue** below.
+
+#### 3.3 Repeat for Multiple Projects
+
+Add as many projects as needed. Each will be processed sequentially.
+
+**Example Queue:**
 ```
-http://projectname.test
+┌─────────────────────────────────────────────────────────┐
+│ Installation Queue                          3 Projects  │
+├─────────────────────────────────────────────────────────┤
+│ ecommerce-api    git@github.com:user/ecommerce.git  [X] │
+│ blog-backend     git@github.com:user/blog.git       [X] │
+│ admin-panel      https://github.com/user/admin.git  [X] │
+└─────────────────────────────────────────────────────────┘
 ```
+
+---
+
+### Step 4: Start Installation
+
+1. Click the green **"START INSTALLATION"** button
+2. Enter your **macOS admin password** when prompted
+3. The app switches to **Installation Logs** view automatically
+
+---
+
+### Step 5: Monitor Progress
+
+The log window shows real-time progress for each project:
+
+```
+[14:32:01] --- Starting Bulk Installation (macOS) ---
+[14:32:02] Installing ecommerce-api...
+[14:32:03] EXEC: git clone git@github.com:user/ecommerce.git /opt/homebrew/var/www/ecommerce-api
+[14:32:15] PHP Required: 8.2
+[14:32:16] Ensuring php@8.2 is installed...
+[14:32:20] EXEC: /opt/homebrew/opt/php@8.2/bin/php /opt/homebrew/bin/composer install -d /opt/homebrew/var/www/ecommerce-api
+[14:33:45] Generating Laravel APP_KEY...
+[14:33:46] Added hosts entry: 127.0.0.1 ecommerce-api.test
+[14:33:47] Completed: ecommerce-api
+```
+
+**Log Color Codes:**
+- 🔵 **Blue**: Commands being executed
+- ⚪ **White**: Normal output
+- 🟢 **Green**: Success messages
+- 🔴 **Red**: Errors or warnings
+
+---
+
+### Step 6: Handle PHP Version Issues (If Needed)
+
+If Composer fails due to PHP version mismatch, a dialog appears:
+
+```
+┌─────────────────────────────────┐
+│ Select PHP                      │
+├─────────────────────────────────┤
+│ Installation failed.            │
+│ Select a PHP version to retry:  │
+│                                 │
+│ [    PHP 8.1    ]               │
+│ [    PHP 8.2    ]               │
+│ [    PHP 8.3    ]               │
+│                                 │
+│ [    Cancel     ]               │
+└─────────────────────────────────┘
+```
+
+Select the appropriate PHP version to retry installation.
+
+---
+
+### Step 7: Installation Complete
+
+When all projects are installed, you'll see:
+- A success dialog: **"Queue completed."**
+- Green log message: **"All operations finished."**
+
+---
+
+### Step 8: Access Your Projects
+
+Each project is now accessible in your browser:
+
+| Project Name | URL |
+|--------------|-----|
+| `ecommerce-api` | http://ecommerce-api.test |
+| `blog-backend` | http://blog-backend.test |
+| `admin-panel` | http://admin-panel.test |
+
+**Note:** The `.test` domain is automatically configured in `/etc/hosts`.
+
+---
+
+## Quick Reference
+
+### Keyboard Shortcuts
+
+| Action | How |
+|--------|-----|
+| Switch to Dashboard | Click "Dashboard / Queue" in sidebar |
+| Switch to Logs | Click "Installation Logs" in sidebar |
+| Remove project from queue | Click red "Remove" button next to project |
+
+### Project Locations
+
+| Item | Location |
+|------|----------|
+| Project Source Code | `/opt/homebrew/var/www/<project-name>/` |
+| Public Symlink | `/opt/homebrew/var/www/html/<project-name>/` |
+| Apache VirtualHost | `/opt/homebrew/etc/httpd/sites-enabled/<project-name>.conf` |
+| Error Logs | `/opt/homebrew/var/log/httpd/<project-name>-error.log` |
+
+*Note: Intel Macs use `/usr/local/` instead of `/opt/homebrew/`*
 
 ---
 
@@ -154,14 +352,45 @@ http://projectname.test
 
 ## What Happens During Setup
 
-1. **Git clone or pull** - Ensures you have the latest project files
-2. **Copy `.env`** - If `.env` is missing, copies `.env.example`
-3. **PHP version detection** - Reads `composer.json` and ensures correct PHP version
-4. **Composer install** - Installs all PHP dependencies
-5. **Symlink public folder** - Links project/public to web root
-6. **Hosts update** - Adds `127.0.0.1 <project>.test` to `/etc/hosts`
-7. **Permissions** - Sets `775` permissions with appropriate ownership
-8. **Apache VirtualHost** - Creates `.conf`, enables site, and reloads Apache
+For each project in the queue, the installer performs these steps automatically:
+
+### Step-by-Step Installation Process
+
+| Step | Action | Details |
+|------|--------|---------|
+| 1 | **Git Clone/Pull** | Clones the repository to `/opt/homebrew/var/www/<name>/` or pulls latest if exists |
+| 2 | **Environment Setup** | Copies `.env.example` → `.env` if `.env` doesn't exist |
+| 3 | **PHP Detection** | Reads `require.php` from `composer.json` to determine PHP version |
+| 4 | **PHP Installation** | Installs required PHP version via Homebrew if not present |
+| 5 | **Composer Install** | Runs `composer install` with detected PHP version |
+| 6 | **Public Directory Check** | Verifies `public/` directory exists (creates if missing) |
+| 7 | **APP_KEY Generation** | Runs `php artisan key:generate --force` for Laravel apps |
+| 8 | **Symlink Creation** | Links `<project>/public/` → `/opt/homebrew/var/www/html/<name>/` |
+| 9 | **Permissions** | Sets `775` permissions, owner: `<user>:staff` |
+| 10 | **VirtualHost Config** | Creates Apache config at `sites-available/<name>.conf` |
+| 11 | **Enable Site** | Symlinks config to `sites-enabled/` |
+| 12 | **Hosts Entry** | Adds `127.0.0.1 <name>.test` to `/etc/hosts` |
+| 13 | **Apache Reload** | Restarts Apache via `brew services restart httpd` |
+
+### Generated VirtualHost Example
+
+For a project named `ecommerce-api` with PHP 8.2:
+
+```apache
+<VirtualHost *:80>
+    ServerName ecommerce-api.test
+    DocumentRoot /opt/homebrew/var/www/html/ecommerce-api
+    <Directory /opt/homebrew/var/www/html/ecommerce-api>
+        AllowOverride All
+        Require all granted
+    </Directory>
+    ErrorLog /opt/homebrew/var/log/httpd/ecommerce-api-error.log
+    CustomLog /opt/homebrew/var/log/httpd/ecommerce-api-access.log combined
+    <FilesMatch \.php$>
+        SetHandler "proxy:unix:/opt/homebrew/var/run/php@8.2-fpm.sock|fcgi://localhost/"
+    </FilesMatch>
+</VirtualHost>
+```
 
 ---
 
