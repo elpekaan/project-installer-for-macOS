@@ -607,15 +607,39 @@ class ProjectInstallerApp(ctk.CTk):
         php_bin = self.get_php_binary(php_ver)
         comp_bin = shutil.which("composer") or os.path.join(HOMEBREW_PREFIX, "bin", "composer")
 
+        composer_success = False
         try:
             self.cmd([php_bin, comp_bin, "install", "-d", path], None, check=True)
+            composer_success = True
         except Exception:
-            # Retry logic
+            # Retry logic - let user select different PHP version
             bins = self.get_php_versions()
             sel = self.request("ask_php", sorted(list(set(bins))))
             if sel:
                 alt_php = self.get_php_binary(sel)
-                self.cmd([alt_php, comp_bin, "install", "-d", path], None)
+                try:
+                    self.cmd([alt_php, comp_bin, "install", "-d", path], None, check=True)
+                    composer_success = True
+                except Exception as e:
+                    self.log(f"Composer install failed: {e}", "error")
+
+        if not composer_success:
+            raise Exception("Composer install failed or was cancelled. Project incomplete.")
+
+        # Verify public directory exists (required for Laravel)
+        public_dir = os.path.join(path, "public")
+        if not os.path.isdir(public_dir):
+            self.log(f"Warning: {path}/public directory not found. Creating empty public folder.", "error")
+            os.makedirs(public_dir, exist_ok=True)
+            # Create minimal index.php
+            with open(os.path.join(public_dir, "index.php"), "w") as f:
+                f.write("<?php echo 'Laravel public folder was missing. Please check your project.';\n")
+
+        # Generate Laravel APP_KEY if artisan exists
+        artisan_path = os.path.join(path, "artisan")
+        if os.path.exists(artisan_path):
+            self.log("Generating Laravel APP_KEY...", "info")
+            self.cmd([php_bin, artisan_path, "key:generate", "--force"], None, check=False)
 
         # Symlink & Perms
         if os.path.islink(html) or os.path.exists(html):
