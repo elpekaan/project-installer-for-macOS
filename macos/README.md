@@ -171,10 +171,10 @@ http://projectname.test
 
 ```bash
 # Keep project files
-~/Library/Application\ Support/laravel-bulk-installer/scripts/uninstall.sh --keep-projects
+"$HOME/Library/Application Support/laravel-bulk-installer/scripts/uninstall.sh" --keep-projects
 
 # Remove everything
-~/Library/Application\ Support/laravel-bulk-installer/scripts/uninstall.sh
+"$HOME/Library/Application Support/laravel-bulk-installer/scripts/uninstall.sh"
 ```
 
 ### Manual Uninstallation

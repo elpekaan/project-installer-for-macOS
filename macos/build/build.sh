@@ -71,6 +71,13 @@ mkdir -p "$PAYLOAD_APP/launchd"
 cp "$PROJECT_ROOT/app.py" "$PAYLOAD_APP/"
 cp -r "$PROJECT_ROOT/launchd/"* "$PAYLOAD_APP/launchd/"
 
+# Copy scripts directory (uninstall, verify, configure)
+mkdir -p "$PAYLOAD_APP/scripts"
+cp "$PROJECT_ROOT/scripts/uninstall.sh" "$PAYLOAD_APP/scripts/"
+cp "$PROJECT_ROOT/scripts/verify.sh" "$PAYLOAD_APP/scripts/"
+cp "$PROJECT_ROOT/scripts/configure-apache.sh" "$PAYLOAD_APP/scripts/"
+chmod +x "$PAYLOAD_APP/scripts/"*.sh
+
 # Create launch.command
 cat > "$PAYLOAD_APP/launch.command" << 'EOF'
 #!/bin/bash
