@@ -78,8 +78,7 @@ COLOR_CARD = "#2d2d2d"      # Card/Content Background
 COLOR_PRIMARY = "#3b8ed0"   # Action Blue
 COLOR_SUCCESS = "#10b981"   # Success Green
 COLOR_DANGER = "#ef4444"    # Error Red
-COLOR_TEXT = "#e1e1e1"      # Main Text
-COLOR_TEXT_DIM = "#a1a1a1"  # Secondary Text
+COLOR_TEXT_DIM = "#a1a1a1"  # Secondary/Dim Text
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
