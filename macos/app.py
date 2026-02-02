@@ -141,20 +141,26 @@ class InstallManager:
     def install_system():
         """Install application to macOS Application Support directory."""
         try:
-            # 1. Clean previous install
-            if os.path.exists(InstallManager.INSTALL_DIR):
-                shutil.rmtree(InstallManager.INSTALL_DIR)
-            os.makedirs(InstallManager.INSTALL_DIR, exist_ok=True)
+            # 1. Validate install path before any destructive operations
+            install_dir = InstallManager.INSTALL_DIR
+            expected_prefix = os.path.join(os.path.expanduser("~"), "Library", "Application Support")
+            if not os.path.realpath(install_dir).startswith(os.path.realpath(expected_prefix)):
+                raise Exception(f"Invalid install directory: {install_dir}")
 
-            # 2. Copy application file
+            # 2. Clean previous install
+            if os.path.exists(install_dir):
+                shutil.rmtree(install_dir)
+            os.makedirs(install_dir, exist_ok=True)
+
+            # 3. Copy application file
             current_script = os.path.realpath(os.path.abspath(__file__))
-            target_script = os.path.join(InstallManager.INSTALL_DIR, "app.py")
+            target_script = os.path.join(install_dir, "app.py")
 
             shutil.copy2(current_script, target_script)
             os.chmod(target_script, 0o755)
 
-            # 3. Download Icon
-            icon_path = os.path.join(InstallManager.INSTALL_DIR, "laravel-icon.png")
+            # 4. Download Icon
+            icon_path = os.path.join(install_dir, "laravel-icon.png")
             try:
                 import urllib.request
                 icon_url = "https://raw.githubusercontent.com/laravel/art/master/logomark/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logomark-cmyk-red.svg"
@@ -163,8 +169,8 @@ class InstallManager:
                 print(f"Failed to download icon: {e}")
                 icon_path = None
 
-            # 4. Create launch script for easy access
-            launch_script = os.path.join(InstallManager.INSTALL_DIR, "launch.command")
+            # 5. Create launch script for easy access
+            launch_script = os.path.join(install_dir, "launch.command")
             with open(launch_script, "w") as f:
                 f.write(f'''#!/bin/bash
 cd "$(dirname "$0")"
@@ -391,8 +397,13 @@ class ProjectInstallerApp(ctk.CTk):
         for v in versions:
             ctk.CTkButton(top, text=f"PHP {v}", command=lambda x=v: pick(x), fg_color=COLOR_CARD, border_width=1, border_color="#555").pack(pady=5, padx=20, fill="x")
 
+        # Add cancel button
+        ctk.CTkButton(top, text="Cancel", command=top.destroy, fg_color=COLOR_DANGER).pack(pady=10, padx=20, fill="x")
+
         self.wait_window(top)
-        result_ref['val'] = selection.get()
+        # Return None if no selection was made (empty string)
+        selected = selection.get()
+        result_ref['val'] = selected if selected else None
 
     def sanitize_project_name(self, name):
         """Sanitize project name to prevent shell injection and path traversal."""
@@ -414,6 +425,11 @@ class ProjectInstallerApp(ctk.CTk):
         sanitized_name = self.sanitize_project_name(name)
         if not sanitized_name:
             messagebox.showerror("Invalid Name", "Project name can only contain letters, numbers, hyphens, and underscores.")
+            return
+
+        # Check for duplicate project names
+        if any(p['name'] == sanitized_name for p in self.projects):
+            messagebox.showerror("Duplicate", f"Project '{sanitized_name}' is already in the queue.")
             return
 
         self.projects.append({'name': sanitized_name, 'repo': repo})
@@ -446,7 +462,8 @@ class ProjectInstallerApp(ctk.CTk):
         self.is_running = True
         self.btn_run.configure(state="disabled", text="Running...")
         self.show_logs()
-        threading.Thread(target=self.run_install).start()
+        # Use daemon=True so thread doesn't prevent app exit
+        threading.Thread(target=self.run_install, daemon=True).start()
 
     # --- Worker Thread ---
     def request(self, atype, payload=None):
@@ -474,8 +491,9 @@ class ProjectInstallerApp(ctk.CTk):
                 self.log(f"FAILED {proj['name']}: {e}", "error")
 
         self.log("All operations finished.", "success")
-        messagebox.showinfo("Done", "Queue completed.")
-        self.reset_state()
+        # Use after() to safely call GUI from worker thread
+        self.after(0, lambda: messagebox.showinfo("Done", "Queue completed."))
+        self.after(0, self.reset_state)
 
     def reset_state(self):
         self.is_running = False
@@ -505,11 +523,11 @@ class ProjectInstallerApp(ctk.CTk):
         )
 
         if proc.stdout:
-            for l in proc.stdout.decode().split("\n"):
+            for l in proc.stdout.decode(errors='replace').split("\n"):
                 if l.strip(): self.log(f"  {l}")
 
         if proc.returncode != 0:
-            err = proc.stderr.decode().strip()
+            err = proc.stderr.decode(errors='replace').strip()
             self.log(f"  ERR: {err}", "error")
 
             # Heuristics for macOS
@@ -555,11 +573,15 @@ class ProjectInstallerApp(ctk.CTk):
         # PHP Detect
         php_ver = "8.2"
         if os.path.exists(f"{path}/composer.json"):
-            with open(f"{path}/composer.json") as f:
-                parsed = json.load(f)
-                req = parsed.get("require", {}).get("php", "")
-                m = re.search(r"(\d+\.\d+)", req)
-                if m: php_ver = m.group(1)
+            try:
+                with open(f"{path}/composer.json") as f:
+                    parsed = json.load(f)
+                    req = parsed.get("require", {}).get("php", "")
+                    m = re.search(r"(\d+\.\d+)", req)
+                    if m: php_ver = m.group(1)
+            except (json.JSONDecodeError, KeyError) as e:
+                self.log(f"Warning: Could not parse composer.json: {e}", "error")
+                self.log(f"Using default PHP version: {php_ver}", "info")
 
         self.log(f"PHP Required: {php_ver}", "info")
 
@@ -582,7 +604,7 @@ class ProjectInstallerApp(ctk.CTk):
 
         try:
             self.cmd([php_bin, comp_bin, "install", "-d", path], None, check=True)
-        except:
+        except Exception:
             # Retry logic
             bins = self.get_php_versions()
             sel = self.request("ask_php", sorted(list(set(bins))))
@@ -596,7 +618,11 @@ class ProjectInstallerApp(ctk.CTk):
         self.cmd(["sudo", "-S", "ln", "-s", f"{path}/public", html], pwd)
         self.cmd(["sudo", "-S", "chmod", "-R", "775", path], pwd)
         # macOS: Use current user and staff group (standard macOS approach)
-        current_user = os.getlogin()
+        try:
+            current_user = os.getlogin()
+        except OSError:
+            # Fallback if no controlling terminal
+            current_user = os.environ.get('USER', os.environ.get('LOGNAME', 'nobody'))
         self.cmd(["sudo", "-S", "chown", "-R", f"{current_user}:{WEB_GROUP}", path], pwd)
 
         # VHost
@@ -650,7 +676,7 @@ class ProjectInstallerApp(ctk.CTk):
             if proc.returncode == 0:
                 self.log(f"Added hosts entry: {hosts_entry}", "info")
             else:
-                self.log(f"Failed to add hosts entry: {proc.stderr.decode()}", "error")
+                self.log(f"Failed to add hosts entry: {proc.stderr.decode(errors='replace')}", "error")
         finally:
             os.unlink(tmp_path)
 
@@ -692,7 +718,7 @@ class ProjectInstallerApp(ctk.CTk):
                             m = re.search(r"PHP (\d+\.\d+)", result.stdout)
                             if m:
                                 versions.append(m.group(1))
-                        except:
+                        except Exception:
                             pass
 
         return versions if versions else ["8.2"]
@@ -702,7 +728,7 @@ class ProjectInstallerApp(ctk.CTk):
         # Try brew services first
         try:
             self.cmd(["brew", "services", "restart", "httpd"], None, check=False)
-        except:
+        except Exception:
             pass
 
         # Also try apachectl for good measure
