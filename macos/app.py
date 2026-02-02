@@ -152,7 +152,11 @@ class InstallManager:
             icon_path = os.path.join(install_dir, "laravel-icon.svg")
             try:
                 import urllib.request
-                icon_url = "https://raw.githubusercontent.com/laravel/art/master/logomark/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logomark-cmyk-red.svg"
+                icon_url = (
+                    "https://raw.githubusercontent.com/laravel/art/master/"
+                    "logomark/5%20SVG/2%20CMYK/1%20Full%20Color/"
+                    "laravel-logomark-cmyk-red.svg"
+                )
                 urllib.request.urlretrieve(icon_url, icon_path)
             except Exception as e:
                 print(f"Failed to download icon: {e}")
@@ -227,14 +231,29 @@ class ProjectInstallerApp(ctk.CTk):
         frame = ctk.CTkFrame(dialog, fg_color="transparent")
         frame.place(relx=0.5, rely=0.5, anchor="center")
 
-        ctk.CTkLabel(frame, text="Laravel Bulk Installer", font=("SF Pro Display", 24, "bold")).pack(pady=10)
-        ctk.CTkLabel(frame, text="Would you like to install this tool to your system?\nThis will install to ~/Library/Application Support.",
-                     font=("SF Pro Display", 14), text_color=COLOR_TEXT_DIM).pack(pady=20)
+        ctk.CTkLabel(
+            frame, text="Laravel Bulk Installer",
+            font=("SF Pro Display", 24, "bold")
+        ).pack(pady=10)
+
+        install_msg = (
+            "Would you like to install this tool to your system?\n"
+            "This will install to ~/Library/Application Support."
+        )
+        ctk.CTkLabel(
+            frame, text=install_msg,
+            font=("SF Pro Display", 14), text_color=COLOR_TEXT_DIM
+        ).pack(pady=20)
 
         def do_install():
             try:
                 InstallManager.install_system()
-                messagebox.showinfo("Success", "Installation complete!\nYou can run 'laravel-installer' from Terminal\nor use the launch.command file.")
+                success_msg = (
+                    "Installation complete!\n"
+                    "You can run 'laravel-installer' from Terminal\n"
+                    "or use the launch.command file."
+                )
+                messagebox.showinfo("Success", success_msg)
                 dialog.destroy()
                 sys.exit()
             except Exception as e:
@@ -246,26 +265,47 @@ class ProjectInstallerApp(ctk.CTk):
         btn_box = ctk.CTkFrame(frame, fg_color="transparent")
         btn_box.pack(pady=20)
 
-        ctk.CTkButton(btn_box, text="Run Once (Try)", fg_color="transparent", border_width=1, command=do_try).pack(side="left", padx=10)
-        ctk.CTkButton(btn_box, text="Install to System", fg_color=COLOR_PRIMARY, command=do_install).pack(side="left", padx=10)
+        ctk.CTkButton(
+            btn_box, text="Run Once (Try)",
+            fg_color="transparent", border_width=1, command=do_try
+        ).pack(side="left", padx=10)
+        ctk.CTkButton(
+            btn_box, text="Install to System",
+            fg_color=COLOR_PRIMARY, command=do_install
+        ).pack(side="left", padx=10)
 
         dialog.mainloop()
 
     def setup_ui(self):
         # --- Sidebar ---
-        self.sidebar = ctk.CTkFrame(self, width=220, corner_radius=0, fg_color=COLOR_SIDEBAR)
+        self.sidebar = ctk.CTkFrame(
+            self, width=220, corner_radius=0, fg_color=COLOR_SIDEBAR
+        )
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.grid_propagate(False)
 
-        ctk.CTkLabel(self.sidebar, text="INSTALLER", font=("SF Pro Display", 20, "bold"), text_color=COLOR_PRIMARY).pack(pady=(30, 10), padx=20, anchor="w")
+        ctk.CTkLabel(
+            self.sidebar, text="INSTALLER",
+            font=("SF Pro Display", 20, "bold"), text_color=COLOR_PRIMARY
+        ).pack(pady=(30, 10), padx=20, anchor="w")
 
-        ctk.CTkLabel(self.sidebar, text="MENU", font=("SF Pro Display", 11, "bold"), text_color=COLOR_TEXT_DIM).pack(pady=(20, 5), padx=20, anchor="w")
+        ctk.CTkLabel(
+            self.sidebar, text="MENU",
+            font=("SF Pro Display", 11, "bold"), text_color=COLOR_TEXT_DIM
+        ).pack(pady=(20, 5), padx=20, anchor="w")
 
-        SidebarButton(self.sidebar, text="Dashboard / Queue", command=self.show_dashboard).pack(fill="x", padx=10, pady=2)
-        SidebarButton(self.sidebar, text="Installation Logs", command=self.show_logs).pack(fill="x", padx=10, pady=2)
+        SidebarButton(
+            self.sidebar, text="Dashboard / Queue", command=self.show_dashboard
+        ).pack(fill="x", padx=10, pady=2)
+        SidebarButton(
+            self.sidebar, text="Installation Logs", command=self.show_logs
+        ).pack(fill="x", padx=10, pady=2)
 
         # Bottom Version
-        ctk.CTkLabel(self.sidebar, text="v2.0.0-macos", font=("SF Pro Display", 10), text_color=COLOR_TEXT_DIM).pack(side="bottom", pady=20)
+        ctk.CTkLabel(
+            self.sidebar, text="v2.0.0-macos",
+            font=("SF Pro Display", 10), text_color=COLOR_TEXT_DIM
+        ).pack(side="bottom", pady=20)
 
         # --- Content Area ---
         self.content_area = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -282,48 +322,86 @@ class ProjectInstallerApp(ctk.CTk):
 
     def build_dashboard(self):
         # Card 1: Add Project
-        card_add = ctk.CTkFrame(self.frame_dashboard, fg_color=COLOR_CARD, corner_radius=15)
+        card_add = ctk.CTkFrame(
+            self.frame_dashboard, fg_color=COLOR_CARD, corner_radius=15
+        )
         card_add.pack(fill="x", pady=(0, 20))
 
-        ctk.CTkLabel(card_add, text="Add New Project", font=("SF Pro Display", 16, "bold")).pack(anchor="w", padx=20, pady=(20, 15))
+        ctk.CTkLabel(
+            card_add, text="Add New Project",
+            font=("SF Pro Display", 16, "bold")
+        ).pack(anchor="w", padx=20, pady=(20, 15))
 
         grid = ctk.CTkFrame(card_add, fg_color="transparent")
         grid.pack(fill="x", padx=20, pady=(0, 20))
 
-        ctk.CTkLabel(grid, text="Project Name", font=("SF Pro Display", 12, "bold")).grid(row=0, column=0, sticky="w", padx=5)
-        self.entry_name = ctk.CTkEntry(grid, placeholder_text="e.g. ecommerce-api", width=250, border_width=0, fg_color="#3E3E3E", height=35)
+        ctk.CTkLabel(
+            grid, text="Project Name",
+            font=("SF Pro Display", 12, "bold")
+        ).grid(row=0, column=0, sticky="w", padx=5)
+        self.entry_name = ctk.CTkEntry(
+            grid, placeholder_text="e.g. ecommerce-api",
+            width=250, border_width=0, fg_color="#3E3E3E", height=35
+        )
         self.entry_name.grid(row=1, column=0, padx=5, pady=(5, 0))
 
-        ctk.CTkLabel(grid, text="Git Repository URL", font=("SF Pro Display", 12, "bold")).grid(row=0, column=1, sticky="w", padx=15)
-        self.entry_repo = ctk.CTkEntry(grid, placeholder_text="git@github.com...", width=350, border_width=0, fg_color="#3E3E3E", height=35)
+        ctk.CTkLabel(
+            grid, text="Git Repository URL",
+            font=("SF Pro Display", 12, "bold")
+        ).grid(row=0, column=1, sticky="w", padx=15)
+        self.entry_repo = ctk.CTkEntry(
+            grid, placeholder_text="git@github.com...",
+            width=350, border_width=0, fg_color="#3E3E3E", height=35
+        )
         self.entry_repo.grid(row=1, column=1, padx=15, pady=(5, 0))
 
-        ctk.CTkButton(grid, text="+ Add to Queue", fg_color=COLOR_PRIMARY, height=35, font=("SF Pro Display", 13, "bold"), command=self.add_project).grid(row=1, column=2, padx=15, pady=(5, 0), sticky="s")
+        ctk.CTkButton(
+            grid, text="+ Add to Queue", fg_color=COLOR_PRIMARY,
+            height=35, font=("SF Pro Display", 13, "bold"),
+            command=self.add_project
+        ).grid(row=1, column=2, padx=15, pady=(5, 0), sticky="s")
 
         # Card 2: Queue
-        card_queue = ctk.CTkFrame(self.frame_dashboard, fg_color=COLOR_CARD, corner_radius=15)
+        card_queue = ctk.CTkFrame(
+            self.frame_dashboard, fg_color=COLOR_CARD, corner_radius=15
+        )
         card_queue.pack(fill="both", expand=True)
 
         header = ctk.CTkFrame(card_queue, fg_color="transparent")
         header.pack(fill="x", padx=20, pady=20)
-        ctk.CTkLabel(header, text="Installation Queue", font=("SF Pro Display", 16, "bold")).pack(side="left")
+        ctk.CTkLabel(
+            header, text="Installation Queue",
+            font=("SF Pro Display", 16, "bold")
+        ).pack(side="left")
 
-        self.lbl_count = ctk.CTkLabel(header, text="0 Projects", font=("SF Pro Display", 13), text_color=COLOR_TEXT_DIM)
+        self.lbl_count = ctk.CTkLabel(
+            header, text="0 Projects",
+            font=("SF Pro Display", 13), text_color=COLOR_TEXT_DIM
+        )
         self.lbl_count.pack(side="left", padx=10)
 
-        self.queue_container = ctk.CTkScrollableFrame(card_queue, fg_color="transparent", height=300)
+        self.queue_container = ctk.CTkScrollableFrame(
+            card_queue, fg_color="transparent", height=300
+        )
         self.queue_container.pack(fill="both", expand=True, padx=10, pady=(0, 20))
 
         # Action Bar
         action_bar = ctk.CTkFrame(self.frame_dashboard, fg_color="transparent")
         action_bar.pack(fill="x", pady=20)
 
-        self.btn_run = ctk.CTkButton(action_bar, text="START INSTALLATION", font=("SF Pro Display", 14, "bold"),
-                                     height=50, fg_color=COLOR_SUCCESS, hover_color="#059669", command=self.start_thread)
+        self.btn_run = ctk.CTkButton(
+            action_bar, text="START INSTALLATION",
+            font=("SF Pro Display", 14, "bold"), height=50,
+            fg_color=COLOR_SUCCESS, hover_color="#059669",
+            command=self.start_thread
+        )
         self.btn_run.pack(fill="x")
 
     def build_logs(self):
-        self.log_textbox = ctk.CTkTextbox(self.frame_logs, font=("SF Mono", 12), fg_color="#111111", text_color="#eeeeee", corner_radius=10)
+        self.log_textbox = ctk.CTkTextbox(
+            self.frame_logs, font=("SF Mono", 12),
+            fg_color="#111111", text_color="#eeeeee", corner_radius=10
+        )
         self.log_textbox.pack(fill="both", expand=True)
         self.log_textbox.tag_config("error", foreground="#ef4444")
         self.log_textbox.tag_config("success", foreground="#10b981")
@@ -358,9 +436,13 @@ class ProjectInstallerApp(ctk.CTk):
             while True:
                 atype, payload, event, result = self.interaction_queue.get_nowait()
                 if atype == "ask_password":
-                    result['val'] = ctk.CTkInputDialog(text="Enter Admin Password:", title="Auth").get_input()
+                    dialog = ctk.CTkInputDialog(
+                        text="Enter Admin Password:", title="Auth"
+                    )
+                    result['val'] = dialog.get_input()
                 elif atype == "ask_dep":
-                    result['val'] = messagebox.askyesno("Dependency Missing", f"Install '{payload}' via Homebrew automatically?")
+                    msg = f"Install '{payload}' via Homebrew automatically?"
+                    result['val'] = messagebox.askyesno("Dependency Missing", msg)
                 elif atype == "ask_php":
                     self.popup_php_select(payload, result)
                 event.set()
@@ -375,7 +457,10 @@ class ProjectInstallerApp(ctk.CTk):
         top.geometry("300x400")
         top.grab_set()
 
-        ctk.CTkLabel(top, text="Installation failed.\nSelect a PHP version to retry:", font=("SF Pro Display", 13)).pack(pady=20)
+        ctk.CTkLabel(
+            top, text="Installation failed.\nSelect a PHP version to retry:",
+            font=("SF Pro Display", 13)
+        ).pack(pady=20)
 
         selection = ctk.StringVar()
 
@@ -384,10 +469,15 @@ class ProjectInstallerApp(ctk.CTk):
             top.destroy()
 
         for v in versions:
-            ctk.CTkButton(top, text=f"PHP {v}", command=lambda x=v: pick(x), fg_color=COLOR_CARD, border_width=1, border_color="#555").pack(pady=5, padx=20, fill="x")
+            ctk.CTkButton(
+                top, text=f"PHP {v}", command=lambda x=v: pick(x),
+                fg_color=COLOR_CARD, border_width=1, border_color="#555"
+            ).pack(pady=5, padx=20, fill="x")
 
         # Add cancel button
-        ctk.CTkButton(top, text="Cancel", command=top.destroy, fg_color=COLOR_DANGER).pack(pady=10, padx=20, fill="x")
+        ctk.CTkButton(
+            top, text="Cancel", command=top.destroy, fg_color=COLOR_DANGER
+        ).pack(pady=10, padx=20, fill="x")
 
         self.wait_window(top)
         # Return None if no selection was made (empty string)
@@ -424,22 +514,32 @@ class ProjectInstallerApp(ctk.CTk):
         name = self.entry_name.get().strip()
         repo = self.entry_repo.get().strip()
 
-        if not name or not repo: return
+        if not name or not repo:
+            return
 
         # Sanitize project name for security
         sanitized_name = self.sanitize_project_name(name)
         if not sanitized_name:
-            messagebox.showerror("Invalid Name", "Project name can only contain letters, numbers, hyphens, and underscores.")
+            msg = "Project name can only contain letters, numbers, "
+            msg += "hyphens, and underscores."
+            messagebox.showerror("Invalid Name", msg)
             return
 
         # Validate Git URL format
         if not self.validate_git_url(repo):
-            messagebox.showerror("Invalid URL", "Please enter a valid Git repository URL.\nExamples:\n- https://github.com/user/repo.git\n- git@github.com:user/repo.git")
+            msg = (
+                "Please enter a valid Git repository URL.\n"
+                "Examples:\n"
+                "- https://github.com/user/repo.git\n"
+                "- git@github.com:user/repo.git"
+            )
+            messagebox.showerror("Invalid URL", msg)
             return
 
         # Check for duplicate project names
         if any(p['name'] == sanitized_name for p in self.projects):
-            messagebox.showerror("Duplicate", f"Project '{sanitized_name}' is already in the queue.")
+            msg = f"Project '{sanitized_name}' is already in the queue."
+            messagebox.showerror("Duplicate", msg)
             return
 
         self.projects.append({'name': sanitized_name, 'repo': repo})
