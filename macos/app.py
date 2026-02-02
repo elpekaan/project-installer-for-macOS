@@ -17,7 +17,7 @@ import time
 import platform
 
 # --- Dependency Check & Auto-Install ---
-REQUIRED_PACKAGES = ["customtkinter", "packaging"]
+REQUIRED_PACKAGES = ["customtkinter"]
 
 def check_and_install_dependencies():
     """Checks for required packages and installs them if missing using standard tkinter."""
@@ -70,7 +70,6 @@ check_and_install_dependencies()
 # --- Imports after dependency check ---
 import customtkinter as ctk
 from tkinter import messagebox
-from packaging import version
 
 # --- THEME CONSTANTS ---
 COLOR_BG = "#1e1e1e"        # Main Background
@@ -159,8 +158,8 @@ class InstallManager:
             shutil.copy2(current_script, target_script)
             os.chmod(target_script, 0o755)
 
-            # 4. Download Icon
-            icon_path = os.path.join(install_dir, "laravel-icon.png")
+            # 4. Download Icon (SVG format)
+            icon_path = os.path.join(install_dir, "laravel-icon.svg")
             try:
                 import urllib.request
                 icon_url = "https://raw.githubusercontent.com/laravel/art/master/logomark/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logomark-cmyk-red.svg"
@@ -178,7 +177,7 @@ cd "$(dirname "$0")"
 ''')
             os.chmod(launch_script, 0o755)
 
-            # 5. Create symlink in /usr/local/bin for CLI access
+            # 6. Create symlink in /usr/local/bin for CLI access
             cli_link = os.path.join(HOMEBREW_PREFIX, "bin", "laravel-installer")
             try:
                 if os.path.islink(cli_link):
@@ -415,6 +414,22 @@ class ProjectInstallerApp(ctk.CTk):
         # Limit length
         return sanitized[:64]
 
+    def validate_git_url(self, url):
+        """Validate Git repository URL format."""
+        # Common Git URL patterns
+        patterns = [
+            r'^https?://[^\s]+\.git$',           # HTTPS ending with .git
+            r'^https?://[^\s]+$',                 # HTTPS without .git
+            r'^git@[^\s]+:[^\s]+\.git$',         # SSH git@host:path.git
+            r'^git@[^\s]+:[^\s]+$',               # SSH git@host:path
+            r'^ssh://[^\s]+$',                    # SSH protocol
+            r'^git://[^\s]+$',                    # Git protocol
+        ]
+        for pattern in patterns:
+            if re.match(pattern, url):
+                return True
+        return False
+
     def add_project(self):
         name = self.entry_name.get().strip()
         repo = self.entry_repo.get().strip()
@@ -425,6 +440,11 @@ class ProjectInstallerApp(ctk.CTk):
         sanitized_name = self.sanitize_project_name(name)
         if not sanitized_name:
             messagebox.showerror("Invalid Name", "Project name can only contain letters, numbers, hyphens, and underscores.")
+            return
+
+        # Validate Git URL format
+        if not self.validate_git_url(repo):
+            messagebox.showerror("Invalid URL", "Please enter a valid Git repository URL.\nExamples:\n- https://github.com/user/repo.git\n- git@github.com:user/repo.git")
             return
 
         # Check for duplicate project names
@@ -591,12 +611,7 @@ class ProjectInstallerApp(ctk.CTk):
         self.log(f"Ensuring {php_formula} is installed...", "info")
         self.cmd(["brew", "install", php_formula], None, check=False)
 
-        # Additional extensions if needed (installed separately on macOS)
-        exts_to_check = ["gd", "zip", "pdo_mysql"]
-        for ext in exts_to_check:
-            ext_formula = f"php@{php_ver}"  # Extensions bundled in Homebrew PHP
-            # Most extensions are included; pecl for extras if needed
-            pass
+        # Note: Most PHP extensions (gd, zip, pdo_mysql) are bundled with Homebrew PHP
 
         # Composer
         php_bin = self.get_php_binary(php_ver)
@@ -657,28 +672,19 @@ class ProjectInstallerApp(ctk.CTk):
                     self.log(f"Hosts entry already exists for {project_name}.test", "info")
                     return
         except PermissionError:
-            pass  # Will need sudo to read, continue with write attempt
+            pass  # /etc/hosts is typically world-readable, but handle edge case
 
-        # Write entry to temp file, then use tee to append (no shell interpolation)
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.hosts', delete=False) as tmp:
-            tmp.write(f"{hosts_entry}\n")
-            tmp_path = tmp.name
-
-        try:
-            # Use tee -a to append safely (no shell needed, tee reads from stdin)
-            proc = subprocess.run(
-                ["sudo", "-S", "tee", "-a", "/etc/hosts"],
-                input=(pwd + "\n" + hosts_entry + "\n").encode(),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE
-            )
-            if proc.returncode == 0:
-                self.log(f"Added hosts entry: {hosts_entry}", "info")
-            else:
-                self.log(f"Failed to add hosts entry: {proc.stderr.decode(errors='replace')}", "error")
-        finally:
-            os.unlink(tmp_path)
+        # Use tee -a to append safely (no shell needed, tee reads from stdin)
+        proc = subprocess.run(
+            ["sudo", "-S", "tee", "-a", "/etc/hosts"],
+            input=(pwd + "\n" + hosts_entry + "\n").encode(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE
+        )
+        if proc.returncode == 0:
+            self.log(f"Added hosts entry: {hosts_entry}", "info")
+        else:
+            self.log(f"Failed to add hosts entry: {proc.stderr.decode(errors='replace')}", "error")
 
     def get_php_binary(self, version):
         """Get PHP binary path for a specific version on macOS (Homebrew)."""
@@ -724,26 +730,21 @@ class ProjectInstallerApp(ctk.CTk):
         return versions if versions else ["8.2"]
 
     def reload_apache(self, pwd):
-        """Reload Apache on macOS using brew services or apachectl."""
-        # Try brew services first
-        try:
-            self.cmd(["brew", "services", "restart", "httpd"], None, check=False)
-        except Exception:
-            pass
-
-        # Also try apachectl for good measure
-        apachectl = os.path.join(HOMEBREW_PREFIX, "bin", "apachectl")
-        if os.path.exists(apachectl):
-            self.cmd(["sudo", "-S", apachectl, "graceful"], pwd, check=False)
-        else:
-            self.cmd(["sudo", "-S", "apachectl", "graceful"], pwd, check=False)
+        """Reload Apache on macOS using brew services (preferred) or apachectl (fallback)."""
+        # Use brew services for Homebrew-managed Apache
+        result = self.cmd(["brew", "services", "restart", "httpd"], None, check=False)
+        if result.returncode != 0:
+            # Fallback to apachectl if brew services fails
+            apachectl = os.path.join(HOMEBREW_PREFIX, "bin", "apachectl")
+            if os.path.exists(apachectl):
+                self.cmd(["sudo", "-S", apachectl, "graceful"], pwd, check=False)
+            else:
+                self.cmd(["sudo", "-S", "apachectl", "graceful"], pwd, check=False)
 
     def get_vhost_template(self, name, root, php):
         """Generate Apache VirtualHost config for macOS."""
         # PHP-FPM socket path on macOS (Homebrew)
-        php_fpm_socket = os.path.join(PATHS["php_run"], f"php{php}-fpm.sock")
-        # Alternative socket location
-        alt_socket = os.path.join(HOMEBREW_PREFIX, "var", "run", f"php@{php}-fpm.sock")
+        php_fpm_socket = os.path.join(HOMEBREW_PREFIX, "var", "run", f"php@{php}-fpm.sock")
 
         log_dir = PATHS["apache_log"]
 
@@ -757,7 +758,7 @@ class ProjectInstallerApp(ctk.CTk):
     ErrorLog {log_dir}/{name}-error.log
     CustomLog {log_dir}/{name}-access.log combined
     <FilesMatch \\.php$>
-        SetHandler "proxy:unix:{alt_socket}|fcgi://localhost/"
+        SetHandler "proxy:unix:{php_fpm_socket}|fcgi://localhost/"
     </FilesMatch>
 </VirtualHost>"""
 
