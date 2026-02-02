@@ -394,13 +394,29 @@ class ProjectInstallerApp(ctk.CTk):
         self.wait_window(top)
         result_ref['val'] = selection.get()
 
+    def sanitize_project_name(self, name):
+        """Sanitize project name to prevent shell injection and path traversal."""
+        # Only allow alphanumeric, hyphen, underscore
+        sanitized = re.sub(r'[^a-zA-Z0-9_-]', '', name)
+        # Prevent empty names or names starting with hyphen
+        if not sanitized or sanitized.startswith('-'):
+            return None
+        # Limit length
+        return sanitized[:64]
+
     def add_project(self):
         name = self.entry_name.get().strip()
         repo = self.entry_repo.get().strip()
 
         if not name or not repo: return
 
-        self.projects.append({'name': name, 'repo': repo})
+        # Sanitize project name for security
+        sanitized_name = self.sanitize_project_name(name)
+        if not sanitized_name:
+            messagebox.showerror("Invalid Name", "Project name can only contain letters, numbers, hyphens, and underscores.")
+            return
+
+        self.projects.append({'name': sanitized_name, 'repo': repo})
         self.refresh_queue_ui()
         self.entry_name.delete(0, "end")
         self.entry_repo.delete(0, "end")
@@ -600,11 +616,43 @@ class ProjectInstallerApp(ctk.CTk):
         # Reload Apache via brew services or apachectl
         self.reload_apache(pwd)
 
-        # Hosts
+        # Hosts - using safer method with tee
         hosts_entry = f"127.0.0.1 {p['name']}.test"
-        self.cmd(["sudo", "-S", "bash", "-c", f"grep -q '{p['name']}.test' /etc/hosts || echo '{hosts_entry}' >> /etc/hosts"], pwd)
+        self.update_hosts_file(p['name'], hosts_entry, pwd)
 
         self.log(f"Completed: {p['name']}", "success")
+
+    def update_hosts_file(self, project_name, hosts_entry, pwd):
+        """Safely update /etc/hosts file without shell injection risk."""
+        # Check if entry already exists
+        try:
+            with open("/etc/hosts", "r") as f:
+                if f"{project_name}.test" in f.read():
+                    self.log(f"Hosts entry already exists for {project_name}.test", "info")
+                    return
+        except PermissionError:
+            pass  # Will need sudo to read, continue with write attempt
+
+        # Write entry to temp file, then use tee to append (no shell interpolation)
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.hosts', delete=False) as tmp:
+            tmp.write(f"{hosts_entry}\n")
+            tmp_path = tmp.name
+
+        try:
+            # Use tee -a to append safely (no shell needed, tee reads from stdin)
+            proc = subprocess.run(
+                ["sudo", "-S", "tee", "-a", "/etc/hosts"],
+                input=(pwd + "\n" + hosts_entry + "\n").encode(),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE
+            )
+            if proc.returncode == 0:
+                self.log(f"Added hosts entry: {hosts_entry}", "info")
+            else:
+                self.log(f"Failed to add hosts entry: {proc.stderr.decode()}", "error")
+        finally:
+            os.unlink(tmp_path)
 
     def get_php_binary(self, version):
         """Get PHP binary path for a specific version on macOS (Homebrew)."""
